@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bible Chapter Viewer with Streak</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        /* Calendar Styles */
+        #calendar-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+        }
+        .calendar-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #2c5282;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+            text-align: center;
+        }
+        .calendar-day-name {
+            font-weight: bold;
+            color: #666;
+            font-size: 0.9em;
+            padding-bottom: 5px;
+        }
+        .calendar-day {
+            padding: 10px 5px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            font-size: 0.9em;
+            position: relative;
+            min-height: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .calendar-day.empty {
+            background-color: transparent;
+        }
+        .calendar-day.today {
+            background-color: #e2e8f0;
+            font-weight: bold;
+            border: 1px solid #cbd5e0;
+        }
+        .fire-emoji {
+            font-size: 1.2em;
+            margin-top: 2px;
+        }
+
+        /* Bible Reader Styles */
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            cursor: pointer;
+        }
+        #verses-container {
+            background-color: #f9f9f9;
+            padding: 30px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .verse {
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        .verse-number {
+            font-weight: bold;
+            color: #2c5282;
+            margin-right: 8px;
+            font-size: 0.85em;
+            vertical-align: super;
+        }
+        .loading {
+            text-align: center;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Read The Bible (KJV)</h1>
+    </div>
+
+    <!-- Calendar Section -->
+    <div id="calendar-container">
+        <div class="calendar-header" id="calendar-month-year"></div>
+        <div class="calendar-grid" id="calendar-grid">
+            <!-- Day names and calendar days will be injected here by JS -->
+        </div>
+    </div>
+
+    <!-- Bible Reader Controls -->
+    <div class="controls">
+        <select id="book-select" disabled>
+            <option>Loading books...</option>
+        </select>
+        <select id="chapter-select" disabled>
+            <option>Chapter 1</option>
+        </select>
+    </div>
+
+    <!-- Verses Container -->
+    <div id="verses-container">
+        <p class="loading">Fetching Bible data securely from GitHub... Please wait.</p>
+    </div>
+
+    <script>
+        // --- STREAK & CALENDAR LOGIC --- //
+        
+        function getFormattedDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function updateAndGetStreakDates() {
+            const todayStr = getFormattedDate(new Date());
+            let streakDates = JSON.parse(localStorage.getItem('bibleStreakDates')) || [];
+            
+            // Automatically log today's visit if not already logged
+            if (!streakDates.includes(todayStr)) {
+                streakDates.push(todayStr);
+                localStorage.setItem('bibleStreakDates', JSON.stringify(streakDates));
+            }
+            
+            return streakDates;
+        }
+
+        function renderCalendar() {
+            const streakDates = updateAndGetStreakDates();
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const todayStr = getFormattedDate(now);
+
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            document.getElementById('calendar-month-year').textContent = `${monthNames[month]} ${year} Streak`;
+
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+
+            // Add Day Names
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            dayNames.forEach(day => {
+                const el = document.createElement('div');
+                el.className = 'calendar-day-name';
+                el.textContent = day;
+                grid.appendChild(el);
+            });
+
+            // Calculate days in month and starting day offset
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Fill empty slots before the 1st of the month
+            for (let i = 0; i < firstDay; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day empty';
+                grid.appendChild(emptyCell);
+            }
+
+            // Fill the days of the month
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateObj = new Date(year, month, i);
+                const dateStr = getFormattedDate(dateObj);
+                
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day';
+                if (dateStr === todayStr) {
+                    dayCell.classList.add('today');
+                }
+                
+                dayCell.textContent = i;
+
+                // Add fire emoji if this date is in the streak dates array
+                if (streakDates.includes(dateStr)) {
+                    const fire = document.createElement('span');
+                    fire.className = 'fire-emoji';
+                    fire.textContent = '🔥';
+                    dayCell.appendChild(fire);
+                }
+
+                grid.appendChild(dayCell);
+            }
+        }
+
+
+        // --- BIBLE READER LOGIC --- //
+
+        const BIBLE_JSON_URL = 'https://raw.githubusercontent.com/thiagobodruk/bible/master/json/en_kjv.json';
+        
+        // Standard English Book Names to override the JSON's Portuguese metadata
+        const englishBookNames = [
+            "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel", 
+            "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra", "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", 
+            "Ecclesiastes", "Song of Solomon", "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos", 
+            "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah", "Malachi", 
+            "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", 
+            "Philippians", "Colossians", "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", 
+            "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
+        ];
+
+        let bibleData = [];
+
+        const bookSelect = document.getElementById('book-select');
+        const chapterSelect = document.getElementById('chapter-select');
+        const versesContainer = document.getElementById('verses-container');
+
+        async function loadBibleData() {
+            try {
+                const response = await fetch(BIBLE_JSON_URL);
+                if (!response.ok) throw new Error('Failed to fetch Bible data');
+                
+                bibleData = await response.json();
+                initializeDropdowns();
+            } catch (error) {
+                versesContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        function initializeDropdowns() {
+            bookSelect.innerHTML = ''; 
+            
+            bibleData.forEach((book, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                // Inject the English name using the index
+                option.textContent = englishBookNames[index] || book.name;
+                bookSelect.appendChild(option);
+            });
+
+            bookSelect.disabled = false;
+            
+            bookSelect.addEventListener('change', updateChapterDropdown);
+            chapterSelect.addEventListener('change', displayVerses);
+
+            updateChapterDropdown();
+        }
+
+        function updateChapterDropdown() {
+            const bookIndex = bookSelect.value;
+            const chaptersCount = bibleData[bookIndex].chapters.length;
+            
+            chapterSelect.innerHTML = '';
+            for (let i = 0; i < chaptersCount; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Chapter ${i + 1}`;
+                chapterSelect.appendChild(option);
+            }
+
+            chapterSelect.disabled = false;
+            displayVerses(); 
+        }
+
+        function displayVerses() {
+            const bookIndex = bookSelect.value;
+            const chapterIndex = chapterSelect.value;
+            
+            // Retrieve the mapped English book name instead of the JSON name
+            const bookName = englishBookNames[bookIndex] || bibleData[bookIndex].name;
+            const versesArray = bibleData[bookIndex].chapters[chapterIndex];
+            
+            let htmlContent = `<h2>${bookName} ${parseInt(chapterIndex) + 1}</h2>`;
+            
+            versesArray.forEach((verseText, index) => {
+                htmlContent += `
+                    <div class="verse">
+                        <span class="verse-number">${index + 1}</span> 
+                        ${verseText}
+                    </div>
+                `;
+            });
+            
+            versesContainer.innerHTML = htmlContent;
+        }
+
+        // Initialize both the calendar and the bible data on page load
+        renderCalendar();
+        loadBibleData();
+    </script>
+</body>
+</html>
